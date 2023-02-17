@@ -5,7 +5,7 @@
 \title{Plot leaflet map from garin fit file}
 \usage{
 plot_map(
-  path,
+  data,
   color = "red",
   opacity = 0.7,
   weight = 3,
@@ -14,7 +14,7 @@ plot_map(
 )
 }
 \arguments{
-\item{path}{path to the garmin fit file}
+\item{data}{fit file read with fit::read.fit()}
 
 \item{color}{route color}
 

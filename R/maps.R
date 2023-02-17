@@ -4,12 +4,13 @@ library("ggplot2")
 library("plotly")
 # parsing gpx file --------------------------------------------------------
 t <- fit::read.fit("/home/jason/practice/gpx/fit_files/9899500808_ACTIVITY.fit")
+t2 <- strava <- fit::read.fit("/home/jason/practice/gpx/fit_files/10451908286_ACTIVITY.fit")
 
 strava <- fit::read.fit("/home/jason/practice/gpx/fit_files/Afternoon_Run.fit")
 
 #' Plot leaflet map from garin fit file
 #'
-#' @param path path to the garmin fit file
+#' @param data fit file read with fit::read.fit()
 #' @param color route color
 #' @param opacity route opacity
 #' @param weight route weigth
@@ -22,14 +23,14 @@ strava <- fit::read.fit("/home/jason/practice/gpx/fit_files/Afternoon_Run.fit")
 #' 
 #' @export plot_map
 #' 
-plot_map <- function(path, 
+plot_map <- function(data, 
                      color = "red",
                      opacity = 0.7,
                      weight = 3,
                      provider = "OpenStreetMap.Mapnik",
                      quantile = 0.8) {
   
-  data <- fit::read.fit(path)
+  #data <- fit::read.fit(path)
   records <- data$record
   condition <- var(data$record$position_lat)
   
@@ -65,6 +66,79 @@ plot_map <- function(path,
 
 }
 
+
+#  #https://stackoverflow.com/questions/50806293/add-gradient-color-to-polyline-in-leaflet-r
+# test <- t$record
+# col <- rainbow(7)[1:6]
+# #col[2] <- "orange"
+# 
+# test <-
+#   test %>%
+#   dplyr::mutate(speed = ms2kmh(t),
+#                 min_km = 
+#                   vapply(X = 1:nrow(test),
+#                          FUN = function(x) {
+#                            
+#                            min_km(speed[x])
+#                            
+#                          },
+#                          FUN.VALUE = character(1L)
+#                   )
+#                 )
+# q <- quantile(test$speed)
+# 
+# test <-
+#   test %>% 
+#   dplyr::mutate(
+#     color = 
+#       vapply(
+#         X = 1:nrow(test),
+#         FUN = function(x) {
+#           if (speed[x] <= q[2]) {
+#             col[6] 
+#           } else if (speed[x] > q[2] & speed[x] <= q[3]) {
+#             col[5]
+#           } else if (speed[x] > q[3] & speed[x] <= q[4]) {
+#             col[4] 
+#           } else if (speed[x] > q[4] & speed[x] <= q[5]) {
+#             col[2] 
+#           } else if (speed[x] > q[5]) {
+#             col[1] 
+#           }
+#         },
+#         FUN.VALUE = character(1L)
+#       ),
+#     nextLat = dplyr::lead(position_lat),
+#     nextLng = dplyr::lead(position_long)
+#     )
+#             
+# #test$color <- as.factor(test$color)
+# 
+# map <-
+#   test %>%
+#   #dplyr::select(position_lat, position_long, speed, color) %>%
+#   leaflet::leaflet() %>%
+#   leaflet::addTiles() %>%
+#   leaflet::addProviderTiles(provider = "OpenStreetMap.Mapnik") %>%
+#   leaflet::addPolylines(.,
+#                         lng = ~position_long,
+#                         lat = ~position_lat,
+#                         color = ~as.list(test$color),
+#                         opacity = 0.7,
+#                         weight = 3)
+# 
+# gradient_map <- 
+#   leaflet() %>% 
+#   addTiles()
+
+# for (i in 1:nrow(test)) {
+#   gradient_map <- addPolylines(map = gradient_map,
+#                                data = test, 
+#                                lng = as.numeric(test[i, c('position_long', 'nextLng')]), 
+#                                lat = as.numeric(test[i, c('position_lat', 'nextLat')]), 
+#                                color = as.character(test[i, c('color')])
+#   )
+# }
 
 #' Seconds to H M S
 #'
@@ -282,6 +356,13 @@ plotly_cadence <- function(data,
                                  span = span))
   loess_cadence[loess_cadence < 0] <- 0
   
+  if(sum(data$record$cadence == 0) < 50 | sum(data$record$cadence == 0) == 0) {
+    cadence_threshold <- 50
+  } else {
+    cadence_threshold <- min(data$record$cadence)
+  }
+  
+  
   #plotly
   fig <-
     plotly::plot_ly(data$record, 
@@ -306,7 +387,7 @@ plotly_cadence <- function(data,
         tickvals = as.list(data$record$timestamp[c(seq(1, nrow(data$record), by = 300), length(run_duration))]),
         tickmode = "array"),
       yaxis = list(title = "Cadence (spm)",
-                   range = list(min(data$record$cadence), max(data$record$cadence)*2))
+                   range = list(cadence_threshold, max(data$record$cadence)*2 +10))
     ) %>%
     plotly::add_lines(x = data$record$timestamp,
                       y = mean(loess_cadence),
@@ -531,3 +612,119 @@ plotly::subplot(style(plotly_HeartRate(t), showlegend = FALSE),
                 nrows = 3,
                 shareX = TRUE) %>%
   plotly::layout(hovermode = 'x')
+
+
+#' Plot heart_rate zones
+#'
+#' @param data fit file read with fit::read.fit()
+#'
+#' @return plotly object
+#' @export plotly_zones
+#'
+plotly_zones <- function(data) {
+  
+  df <- 
+    data.frame(
+      zone = c("Zone 1", "Zone 2", "Zone 3", "Zone 4", "Zone 5"),
+      n = 0,
+      percent = 0)
+  
+  data <-
+    data$record %>% 
+    dplyr::select(heart_rate, timestamp) %>%
+    dplyr::mutate(
+      zone = 
+        dplyr::case_when(
+          heart_rate <= 110 ~ "Zone 1",
+          heart_rate > 110 & heart_rate <= 138 ~ "Zone 2",
+          heart_rate > 138 & heart_rate <= 158 ~ "Zone 3",
+          heart_rate > 158 & heart_rate <= 166 ~ "Zone 4",
+          heart_rate > 166 ~ "Zone 5"
+        )
+    ) %>% 
+    dplyr::count(zone, .drop = FALSE) %>%
+    dplyr::summarise(zone, n, percent = round(prop.table(n) * 100, digits = 2))
+  
+  complete_df <- 
+    data %>% 
+    dplyr::anti_join(df, ., by = "zone") %>%
+    dplyr::bind_rows(data) %>%
+    dplyr::arrange(zone) %>%
+    dplyr::mutate(filling = 100 - percent,
+                  sum = percent + filling)
+  
+  fig <-
+    complete_df %>%
+    plot_ly(x = ~percent, 
+            y = ~zone, 
+            type = 'bar', 
+            orientation = 'h',
+            marker = list(color = c('rgb(193, 190, 190)',
+                                    'rgb(59, 151, 243)',
+                                    'rgb(130, 201, 30)',
+                                    'rgb(249, 137, 37)',
+                                    'rgb(211, 32, 32)')
+                          ),
+            textposition = "auto",
+            hoverinfo = "text",
+            hovertext = paste(paste0(complete_df$zone),
+                              "<br>",
+                              paste0("Time :", hms::as_hms(complete_df$n)),
+                              "<br>",
+                              paste0("Percent: ", round(complete_df$percent, digits = 0), " %")
+                              ),
+            showlegend = FALSE
+            ) %>% 
+    add_trace(x = ~filling, 
+              name = 'test',
+              marker = list(color = 'rgb(228, 228, 228)'),
+              showlegend = FALSE
+              ) %>%
+    plotly::layout(barmode = 'stack',
+                   #hovermode = 'x',
+                   showlegend = FALSE,
+                   xaxis = list(title = ''),
+                   yaxis = list(title = "")
+    )
+    # plotly::add_annotations( x = ~ sum+2,
+    #                          y = ~zone,
+    #                          text = ~round(percent, digits = 0),
+    #                          xref = "x",
+    #                          yref = "y",
+    #                          showarrow = FALSE)
+    
+  
+  return(fig)
+  
+}
+
+#                
+# df <- 
+#   data.frame(
+#     zone = c("Zone 1", "Zone 2", "Zone 3", "Zone 4", "Zone 5"),
+#     n = 0,
+#     percent = 0)
+# 
+# data <-
+#   t$record %>% 
+#   dplyr::select(heart_rate, timestamp) %>%
+#   dplyr::mutate(
+#     zone = 
+#       dplyr::case_when(
+#         heart_rate <= 110 ~ "Zone 1",
+#         heart_rate > 110 & heart_rate <= 138 ~ "Zone 2",
+#         heart_rate > 138 & heart_rate <= 158 ~ "Zone 3",
+#         heart_rate > 158 & heart_rate <= 166 ~ "Zone 4",
+#         heart_rate > 166 ~ "Zone 5"
+#       )
+#   ) %>% 
+#   dplyr::count(zone, .drop = FALSE) %>%
+#   dplyr::summarise(zone, n, percent = round(prop.table(n) * 100, digits = 2))
+# 
+# complete_df <- 
+#   data %>% 
+#   dplyr::anti_join(df, ., by = "zone") %>%
+#   dplyr::bind_rows(data) %>%
+#   dplyr::arrange(zone) %>%
+#   dplyr::mutate(filling = 100 - percent,
+#                 sum = percent + filling)
