@@ -4,7 +4,7 @@
 \alias{plotly_cadence}
 \title{Plot plotly cadence}
 \usage{
-plotly_cadence(data, span = 0.007)
+plotly_cadence(data, span = 0.007, black = FALSE)
 }
 \arguments{
 \item{data}{}

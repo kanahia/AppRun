@@ -4,7 +4,7 @@
 \alias{plotly_HeartRate}
 \title{Plot plotly heart rate based on garmin fenix 6x pro}
 \usage{
-plotly_HeartRate(data, title = "")
+plotly_HeartRate(data, title = "", opacity = 0.8, black = FALSE)
 }
 \arguments{
 \item{data}{fit file read with fit::read.fit()}

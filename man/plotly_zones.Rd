@@ -4,7 +4,7 @@
 \alias{plotly_zones}
 \title{Plot heart_rate zones}
 \usage{
-plotly_zones(data)
+plotly_zones(data, black = FALSE)
 }
 \arguments{
 \item{data}{fit file read with fit::read.fit()}

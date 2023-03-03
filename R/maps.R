@@ -3,10 +3,9 @@ library("fit")
 library("ggplot2")
 library("plotly")
 # parsing gpx file --------------------------------------------------------
-t <- fit::read.fit("/home/jason/practice/gpx/fit_files/9899500808_ACTIVITY.fit")
-t2 <- strava <- fit::read.fit("/home/jason/practice/gpx/fit_files/10451908286_ACTIVITY.fit")
 
-strava <- fit::read.fit("/home/jason/practice/gpx/fit_files/Afternoon_Run.fit")
+#strava <- fit::read.fit("/home/jason/practice/gpx/fit_files/Afternoon_Run.fit")
+
 
 #' Plot leaflet map from garin fit file
 #'
@@ -31,7 +30,10 @@ plot_map <- function(data,
                      quantile = 0.8) {
   
   #data <- fit::read.fit(path)
-  records <- data$record
+  records <- 
+    data$record %>%
+    dplyr::filter(position_lat != position_long)
+  
   condition <- var(data$record$position_lat)
   
   if(condition > 1){
@@ -41,11 +43,13 @@ plot_map <- function(data,
       dplyr::arrange(timestamp)
     
   } else {
-    records <- data$record
+    records <- 
+      data$record
   }
   
   map <-
     records %>%
+    dplyr::filter(position_lat != position_long) %>%
     dplyr::select(position_lat, position_long) %>%
     leaflet::leaflet() %>%
     leaflet::addTiles() %>%
@@ -56,11 +60,11 @@ plot_map <- function(data,
                           color = color, 
                           opacity = opacity, 
                           weight = weight) %>%
-    leaflet::addMarkers(lng= data$record$position_long[1], 
-                        lat= data$record$position_lat[1],
+    leaflet::addMarkers(lng= records$position_long[1], 
+                        lat= records$position_lat[1],
                         popup="Start") %>%
-    leaflet::addMarkers(lng= data$record$position_long[length(data$record$position_long)],
-                        lat= data$record$position_lat[length(data$record$position_lat)],
+    leaflet::addMarkers(lng= records$position_long[length(records$position_long)],
+                        lat= records$position_lat[length(records$position_lat)],
                         popup="Finish")
   return(map)
 
@@ -214,7 +218,9 @@ ms2kmh <- function(data){
 #' @export plotly_HeartRate
 #' 
 plotly_HeartRate <- function(data,
-                             title = ""){
+                             title = "",
+                             opacity = 0.8,
+                             black = FALSE){
   
   if(is.list(data)){
     run_duration <- duration2time(data$session$total_timer_time)
@@ -234,7 +240,7 @@ plotly_HeartRate <- function(data,
                     type = 'scatter', 
                     mode = 'lines', 
                     fill = 'tozeroy',
-                    fillcolor = 'rgba(233, 27, 27, 0.4)',
+                    fillcolor = glue::glue('rgba(255, 0, 0, {opacity})'), #'rgba(233, 27, 27, 0.4)',
                     line = list(color = 'rgba(205, 12, 24, 0.8)'),
                     hoverinfo = "text",
                     hovertext = paste(paste0(round(loess_hr, digits = 0), " bpm"),
@@ -278,8 +284,21 @@ plotly_HeartRate <- function(data,
                              font = list(color = "black"))
     )
   
+  if(black == TRUE) {
+    fig <- 
+      fig %>%
+      plotly::layout(plot_bgcolor  = "rgba(20, 19, 33, 1)",
+                     paper_bgcolor = "rgba(18, 17, 31, 0.7)",
+                     fig_bgcolor   = "rgba(18, 17, 31, 0.05)", 
+                     xaxis = list(color = "white", gridcolor = "ffff"),
+                     yaxis = list(color = "white", gridcolor = "ffff"))
+  } else {
+    fig <- fig
+  }
+  
   return(fig)
 }
+
 
 #' Get colors for cadence zones
 #'
@@ -328,7 +347,8 @@ set_colors <- function(data){
 #' @export plotly_cadence
 #'
 plotly_cadence <- function(data,
-                           span = 0.007) {
+                           span = 0.007,
+                           black = FALSE) {
   
   if(is.list(data)){
     run_duration <- duration2time(data$session$total_timer_time)
@@ -406,64 +426,22 @@ plotly_cadence <- function(data,
     plotly::layout(showlegend = FALSE) %>%
     plotly::hide_colorbar()
   
+  if(black == TRUE) {
+    fig <- 
+      fig %>%
+      plotly::layout(plot_bgcolor  = "rgba(20, 19, 33, 1)",
+                     paper_bgcolor = "rgba(18, 17, 31, 0.7)",
+                     fig_bgcolor   = "rgba(18, 17, 31, 0.05)", 
+                     xaxis = list(color = "white", gridcolor = "ffff"),
+                     yaxis = list(color = "white", gridcolor = "ffff"))
+  } else {
+    fig <- fig
+  }
+  
   return(fig)
   
 }
-                 
-head(t$record)
-dim(t$record)
 
-attr(t$record,'units')
-
-t$record <- 
-  t$record %>%
-  dplyr::mutate(
-    Date = as.POSIXct(timestamp, origin="1989-12-31"),
-    Date_raw = Date) %>%
-  tidyr::separate(col = "Date", into = c("Date", "Time"), sep = " ")
-
-head(t$record)
-
-#t$record$Time <- hms::as_hms(t$record$Time)
-t$record$Date <- as.Date(t$record$Date)
-
-head(t$record)
-
-t$record <- t$record[1:round(t$session$total_timer_time), ]
-
-head(t$record)
-dim(t$record)
-
-    
-
-
-dat_df <- 
-  t$record %>%
-  mutate(lat_lead = lead(position_lat)) %>%
-  mutate(lon_lead = lead(position_long)) %>%
-  rowwise() %>%
-  mutate(dist_to_lead_m = 
-           geosphere::distm(c(position_long, position_lat), 
-                            c(lon_lead, lat_lead), 
-                            fun = geosphere::distHaversine)[1,1]) %>%
-  ungroup()
-
-dat_df <-
-  dat_df %>%
-    mutate(ts_POSIXct_lead = lead(Date_raw)) %>%
-    mutate(ts_diff_s = as.numeric(difftime(ts_POSIXct_lead, Date_raw, units = "secs")))
-
-dat_df <- 
-  dat_df %>%
-  mutate(speed_m_per_sec = dist_to_lead_m / ts_diff_s) %>%
-  mutate(speed_km_per_h = speed_m_per_sec * 3.6)
-
-dat_df <- 
-  dat_df %>% 
-  select(-c(lat_lead, lon_lead, ts_POSIXct_lead, ts_diff_s))
-
-head(dat_df) %>% 
-  as.data.frame()
 
 ###############
 
@@ -479,7 +457,9 @@ head(dat_df) %>%
 #' @export plotly_speed
 #' 
 plotly_speed <- function(data,
-                         title = ""){
+                         title = "",
+                         opacity = 0.4,
+                         black = FALSE){
   
   if(is.list(data)){
     run_duration <- duration2time(data$session$total_timer_time)
@@ -515,8 +495,8 @@ plotly_speed <- function(data,
                     type = 'scatter', 
                     mode = 'lines', 
                     fill = 'tozeroy',
-                    fillcolor = 'rgba(37, 150, 190, 0.4)',
-                    line = list(color = 'rgba(37, 150, 190, 0.7)'),
+                    fillcolor = glue::glue('rgba(37, 150, 190, {opacity})'),
+                    line = list(color = 'rgba(37, 150, 190, 0.9)'),
                     hoverinfo = "text",
                     hovertext = paste(paste0(round(loess_data, digits = 2), " km/h"),
                                       "<br>",
@@ -562,6 +542,18 @@ plotly_speed <- function(data,
                              font = list(color = "black"))
                       )
   
+  if(black == TRUE) {
+    fig <- 
+      fig %>%
+      plotly::layout(plot_bgcolor  = "rgba(20, 19, 33, 1)",
+                     paper_bgcolor = "rgba(18, 17, 31, 0.7)",
+                     fig_bgcolor   = "rgba(18, 17, 31, 0.05)", 
+                     xaxis = list(color = "white", gridcolor = "ffff"),
+                     yaxis = list(color = "white", gridcolor = "ffff"))
+  } else {
+    fig <- fig
+  }
+  
   return(fig)
 }
 
@@ -606,12 +598,12 @@ min_km <- function(x) {
 }
 
 
-plotly::subplot(style(plotly_HeartRate(t), showlegend = FALSE),
-                style(plotly_speed(t), showlegend = FALSE),
-                plotly_cadence(t),
-                nrows = 3,
-                shareX = TRUE) %>%
-  plotly::layout(hovermode = 'x')
+# plotly::subplot(style(plotly_HeartRate(t), showlegend = FALSE),
+#                 style(plotly_speed(t), showlegend = FALSE),
+#                 plotly_cadence(t),
+#                 nrows = 3,
+#                 shareX = TRUE) %>%
+#   plotly::layout(hovermode = 'x')
 
 
 #' Plot heart_rate zones
@@ -621,7 +613,8 @@ plotly::subplot(style(plotly_HeartRate(t), showlegend = FALSE),
 #' @return plotly object
 #' @export plotly_zones
 #'
-plotly_zones <- function(data) {
+plotly_zones <- function(data,
+                         black = FALSE) {
   
   df <- 
     data.frame(
@@ -692,39 +685,20 @@ plotly_zones <- function(data) {
     #                          xref = "x",
     #                          yref = "y",
     #                          showarrow = FALSE)
+  
+  if(black == TRUE) {
+    fig <- 
+      fig %>%
+      plotly::layout(plot_bgcolor  = "rgba(20, 19, 33, 1)",
+                     paper_bgcolor = "rgba(18, 17, 31, 0.7)",
+                     fig_bgcolor   = "rgba(18, 17, 31, 0.05)", 
+                     xaxis = list(color = "white", gridcolor = 'rgba(255,255,255, 1)',
+                     yaxis = list(color = "white", gridcolor = 'rgba(255,255,255, 1)')))
+  } else {
+    fig <- fig
+  }
     
   
   return(fig)
   
 }
-
-#                
-# df <- 
-#   data.frame(
-#     zone = c("Zone 1", "Zone 2", "Zone 3", "Zone 4", "Zone 5"),
-#     n = 0,
-#     percent = 0)
-# 
-# data <-
-#   t$record %>% 
-#   dplyr::select(heart_rate, timestamp) %>%
-#   dplyr::mutate(
-#     zone = 
-#       dplyr::case_when(
-#         heart_rate <= 110 ~ "Zone 1",
-#         heart_rate > 110 & heart_rate <= 138 ~ "Zone 2",
-#         heart_rate > 138 & heart_rate <= 158 ~ "Zone 3",
-#         heart_rate > 158 & heart_rate <= 166 ~ "Zone 4",
-#         heart_rate > 166 ~ "Zone 5"
-#       )
-#   ) %>% 
-#   dplyr::count(zone, .drop = FALSE) %>%
-#   dplyr::summarise(zone, n, percent = round(prop.table(n) * 100, digits = 2))
-# 
-# complete_df <- 
-#   data %>% 
-#   dplyr::anti_join(df, ., by = "zone") %>%
-#   dplyr::bind_rows(data) %>%
-#   dplyr::arrange(zone) %>%
-#   dplyr::mutate(filling = 100 - percent,
-#                 sum = percent + filling)
